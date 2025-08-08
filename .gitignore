@@ -1,0 +1,7 @@
+.venv/
+__pycache__/
+*.pyc
+lightning_logs/
+outputs/*.npz
+logs/
+.DS_Store
