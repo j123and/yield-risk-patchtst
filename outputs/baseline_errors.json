@@ -1,0 +1,17 @@
+{
+  "oos_rmse": 0.00017102806034764012,
+  "oos_qlike": -8.833918632536731,
+  "holdout_start": "2023-01-02",
+  "holdout_rmse": 0.00013542607104690237,
+  "holdout_qlike": -8.957591362529246,
+  "min_train_days": 500,
+  "garch_t": {
+    "oos_rmse": 0.0002512642169299563,
+    "oos_qlike": -8.60324332822525,
+    "holdout_start": "2023-01-02",
+    "holdout_rmse": 0.00022890758774825781,
+    "holdout_qlike": -8.763879702269225,
+    "min_train_days": 500,
+    "refit_step": 20
+  }
+}
