@@ -1,5 +1,32 @@
-**How to reproduce:**
-1) `make gk audit har garch`
-2) `python src/build_sequences.py --symbol SPY --seq_len 120`
-3) `python src/train_patchtst_multitask.py --symbol SPY --seq_len 120 --split_date 2023-01-02 --epochs 80 --batch 128 --patch_len 30 --d_model 128 --nhead 4 --nlayers 3 --beta 0.5`
-4) `python src/eval_phase4.py --symbol SPY --holdout_start 2023-01-02`
+# Intraday Volatility → VaR/ES (SPY) — HAR/GARCH vs PatchTST
+
+Deep PatchTST (quantile + variance heads) versus classic HAR/GARCH for daily risk on SPY.  
+Objective: forecast variance and produce a well-calibrated 95% VaR that passes standard back-tests.
+
+![VaR95 breach timeline](figs/var_breach_timeline.png)
+
+## Headline results (holdout 2023-01-02 → 2025-07-29)
+- VaR(95%) — PatchTST (calibrated): coverage 5.12%, Kupiec p = 0.885, Christoffersen p = 0.227; last-250 breaches 18/250, within the 6–20 acceptance band.
+- Variance forecasting: HAR has the best QLIKE; PatchTST variance head is competitive.
+
+| model        | RMSE       | QLIKE  |
+|--------------|------------|--------|
+| HAR          | 0.000136   | -8.960 |
+| GARCH_t      | 0.000229   | -8.764 |
+| PatchTST_var | 0.000145   | -8.744 |
+
+Full write-up: **[docs/var_decision_memo.md](docs/var_decision_memo.md)**
+
+## What’s inside
+- Data: Yahoo daily OHLC; realized variance via Garman–Klass proxy.
+- Baselines: HAR-RV and GARCH(1,1) with Student-t errors.
+- Deep model: PatchTST encoder with two heads — τ = 0.05 return quantile (direct VaR) and log-variance.
+- Evaluation: RMSE/QLIKE for σ²; VaR back-tests (Kupiec, Christoffersen) + 95% binomial acceptance band; breach-timeline figure.
+
+## Repo layout (key files)
+docs/var_decision_memo.md
+figs/var_breach_timeline.png
+tables/error_metrics.csv var_backtest.csv dm_test.csv es_realized.csv
+outputs/har_preds.csv garch_preds.csv patch_preds.csv var_series.csv baseline_errors.json
+src/ingest_yahoo_gk.py audit_rv.py baseline_har.py baseline_garch_t.py
+src/build_sequences.py train_patchtst_multitask.py eval_phase4.py update_memo.py
