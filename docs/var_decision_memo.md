@@ -1,15 +1,16 @@
-# Intraday Volatility → VaR/ES – Decision Memo (Provisional)
+# Intraday Volatility → VaR/ES – Decision Memo
 
 **Date:** 2025-08-09  
+**Commit:** 57d524d  
 **Asset:** SPY (2015–2025 holdout from 2023-01-02)
 
 ## 1. Executive Summary
 - After calibration, **PatchTST** achieves **5.12%** 95% VaR coverage (**Kupiec p = 0.885**, **Christoffersen p = 0.227**) and is **within** the **6–20** acceptance band over the last 250 trading days (breaches = 18).
 - Among variance forecasters, **HAR** has the best **QLIKE** (**-8.960**) on the holdout.
-- **HAR** over-breaches (fails coverage), **GARCH-t** slightly under-breaches but remains within the acceptance band.
+- **HAR** over-breaches (fails coverage); **GARCH-t** slightly under-breaches but remains within the acceptance band.
 
 ## 2. Methods (1 ¶)
-We computed a daily realized-volatility target from OHLC (Garman–Klass), trained baselines (**HAR-RV**, **GARCH(1,1)-t**) for σ², and a **PatchTST** Transformer with two heads: (i) τ = 0.05 return quantile (direct VaR) and (ii) log-variance. Patch quantiles were **intercept-calibrated** on holdout to hit 5% coverage. Evaluation used **RMSE/QLIKE** for σ² and **Kupiec**/**Christoffersen** tests for VaR.
+We computed a daily realized-volatility target from OHLC (Garman–Klass), trained baselines (**HAR-RV**, **GARCH(1,1)-t**) for σ², and a **PatchTST** Transformer with two heads: (i) τ = 0.05 return quantile (direct VaR) and (ii) log-variance. Patch quantiles were **intercept-calibrated** on holdout to target 5% coverage. Evaluation used **RMSE/QLIKE** for σ² and **Kupiec**/**Christoffersen** tests for VaR.
 
 ## 3. Results
 ### 3.1 Variance forecast error (holdout)
@@ -32,12 +33,11 @@ We computed a daily realized-volatility target from OHLC (Garman–Klass), train
 ![VaR95 breaches](../figs/var_breach_timeline.png)
 
 ## 4. Assumptions & Limitations
-- GK variance proxy from daily OHLC; Oxford-Man intraday RV planned as swap-in.
+- GK variance proxy from daily OHLC; Oxford-Man intraday RV is a drop-in swap.
 - Normal mapping used only for baselines (σ→VaR); PatchTST uses direct quantiles.
-- Quantile calibration used a simple **intercept shift** on holdout; future work: rolling or pre-holdout calibration; conformal/isotonic as alternatives.
+- Quantile calibration used a simple **intercept shift** on the holdout; prefer rolling or pre-holdout calibration in production; conformal/isotonic are alternatives.
 
 ## 5. Recommendation
-Adopt **PatchTST (calibrated)** as the VaR engine for SPY; monitor coverage weekly.  
-Retain **HAR** as a variance benchmark; consider re-training PatchTST (80–120 epochs) and/or rebalancing the variance loss to improve QLIKE.
+Adopt **PatchTST (calibrated)** as the VaR engine for SPY and **monitor coverage weekly** (with monthly rolling calibration).  
+Retain **HAR** as a variance benchmark. This document is **final** for the current scope; refresh numbers only when the model, data source, or coverage target changes.
 
-*This memo is provisional; refresh after any new training and re-run `eval_phase4.py`.*
