@@ -57,7 +57,7 @@ except Exception:
     commit = "N/A"
 
 # Build memo text (FINAL)
-md = f"""# Intraday Volatility → VaR/ES – Decision Memo
+md = f"""# Intraday Volatility, VaR/ES Decision Memo
 
 **Date:** {date.today()}  
 **Commit:** {commit}  
