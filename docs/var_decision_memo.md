@@ -1,7 +1,7 @@
-# Intraday Volatility: VaR/ES Decision Memo
+# Intraday Volatility → VaR/ES – Decision Memo
 
-**Date:** 2025-08-09  
-**Commit:** 3dde20d  
+**Date:** 2025-08-10  
+**Commit:** 8d0733d  
 **Asset:** SPY (2015–2025 holdout from 2023-01-02)
 
 ## 1. Executive Summary
@@ -21,8 +21,6 @@ Daily realized-variance target from OHLC (Garman–Klass). Baselines: HAR-RV and
 | PatchTST_var | 0.000145 |  -8.744 |
 
 ### 3.2 VaR(95%) back-tests (holdout)
-*95% binomial acceptance band over the last window: **6–20** breaches.*
-
 | model     |   N_effective |   breaches | coverage   |   kupiec_p |   christoffersen_p |   breaches_lastN | band_95pct   | status_95pct   |
 |:----------|--------------:|-----------:|:-----------|-----------:|-------------------:|-----------------:|:-------------|:---------------|
 | HAR       |           644 |         72 | 11.18%     |      0     |              0.762 |               33 | 6–20         | too_many       |
@@ -39,4 +37,3 @@ Daily realized-variance target from OHLC (Garman–Klass). Baselines: HAR-RV and
 
 ## 5. Recommendation
 Adopt PatchTST with rolling calibration as the VaR(95) engine; monitor weekly and alert if last-window breaches exit the acceptance band. Retain HAR as a variance benchmark.
-
