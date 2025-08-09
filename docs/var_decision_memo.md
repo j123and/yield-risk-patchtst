@@ -39,5 +39,5 @@ We computed a daily realized-volatility target from OHLC (Garman–Klass), train
 
 ## 5. Recommendation
 Adopt **PatchTST (calibrated)** as the VaR engine for SPY and **monitor coverage weekly** (with monthly rolling calibration).  
-Retain **HAR** as a variance benchmark. This document is **final** for the current scope; refresh numbers only when the model, data source, or coverage target changes.
+Retain **HAR** as a variance benchmark. 
 
