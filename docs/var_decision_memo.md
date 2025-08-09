@@ -1,4 +1,4 @@
-# Intraday Volatility → VaR/ES – Decision Memo
+# Intraday Volatility: VaR/ES Decision Memo
 
 **Date:** 2025-08-09  
 **Commit:** 57d524d  
