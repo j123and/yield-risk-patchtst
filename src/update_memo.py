@@ -57,7 +57,7 @@ except Exception:
 CALIB_NOTE = f"Rolling 250-day intercept calibration on residuals (quantile p=0.035, EMA=0.20); effective N = {n_eff}"
 b_last_str = f"; last-window breaches = **{b_last}**" if b_last is not None else ""
 
-md = f"""# Intraday Volatility → VaR/ES – Decision Memo
+md = f"""# Intraday Volatility: VaR/ES Decision Memo
 
 **Date:** {date.today()}  
 **Commit:** {commit}  
@@ -68,8 +68,8 @@ md = f"""# Intraday Volatility → VaR/ES – Decision Memo
 - Calibration: {CALIB_NOTE}.
 - Variance: **{best_qlike_model}** has best **QLIKE** (**{best_qlike_val}**); PatchTST variance head is competitive.
 
-## 2. Methods (1 paragraph)
-Daily realized-variance target from OHLC (Garman–Klass). Baselines: HAR-RV and GARCH(1,1)-t (map σ̂→VaR with Normal). Deep model: PatchTST with two heads—τ=0.05 return quantile (direct VaR) and log-variance. Calibration uses a rolling intercept shift fit on trailing 250 days. Evaluation uses RMSE/QLIKE for σ² and Kupiec/Christoffersen for VaR; rolling back-tests reported.
+## 2. Methods
+Daily realized-variance target from OHLC (Garman–Klass). Baselines: HAR-RV and GARCH(1,1)-t (map σ̂→VaR with Normal). Deep model: PatchTST with two heads, τ=0.05 return quantile (direct VaR) and log-variance. Calibration uses a rolling intercept shift fit on trailing 250 days. Evaluation uses RMSE/QLIKE for σ² and Kupiec/Christoffersen for VaR; rolling back-tests reported.
 
 ## 3. Results
 ### 3.1 Variance forecast error (holdout)

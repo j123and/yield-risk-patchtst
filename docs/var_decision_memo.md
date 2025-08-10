@@ -1,7 +1,7 @@
-# Intraday Volatility → VaR/ES – Decision Memo
+# Intraday Volatility: VaR/ES Decision Memo
 
 **Date:** 2025-08-10  
-**Commit:** 8d0733d  
+**Commit:** 57f2cfb  
 **Asset:** SPY (2015–2025 holdout from 2023-01-02)
 
 ## 1. Executive Summary
@@ -9,8 +9,8 @@
 - Calibration: Rolling 250-day intercept calibration on residuals (quantile p=0.035, EMA=0.20); effective N = 394.
 - Variance: **HAR** has best **QLIKE** (**-8.960**); PatchTST variance head is competitive.
 
-## 2. Methods (1 paragraph)
-Daily realized-variance target from OHLC (Garman–Klass). Baselines: HAR-RV and GARCH(1,1)-t (map σ̂→VaR with Normal). Deep model: PatchTST with two heads—τ=0.05 return quantile (direct VaR) and log-variance. Calibration uses a rolling intercept shift fit on trailing 250 days. Evaluation uses RMSE/QLIKE for σ² and Kupiec/Christoffersen for VaR; rolling back-tests reported.
+## 2. Methods
+Daily realized-variance target from OHLC (Garman–Klass). Baselines: HAR-RV and GARCH(1,1)-t (map σ̂→VaR with Normal). Deep model: PatchTST with two heads, τ=0.05 return quantile (direct VaR) and log-variance. Calibration uses a rolling intercept shift fit on trailing 250 days. Evaluation uses RMSE/QLIKE for σ² and Kupiec/Christoffersen for VaR; rolling back-tests reported.
 
 ## 3. Results
 ### 3.1 Variance forecast error (holdout)
