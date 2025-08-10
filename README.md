@@ -6,7 +6,7 @@ Objective: forecast variance and produce a well-calibrated 95% VaR that passes s
 ![VaR95 breach timeline](figs/var_breach_timeline.png)
 
 ## Headline results (holdout 2023-01-02 -> 2025-07-29)
-- VaR(95%): PatchTST (calibrated): coverage 5.12%, Kupiec p = 0.885, Christoffersen p = 0.227; last-250 breaches 18/250, within the 6–20 acceptance band.
+- VaR(95%): PatchTST (calibrated): coverage 5.08%, Kupiec p = 0.945, Christoffersen p = 0.714; last-250 breaches 14/250, within the 6–20 acceptance band.
 - Variance forecasting: HAR has the best QLIKE; PatchTST variance head is competitive.
 
 | model        | RMSE       | QLIKE  |
