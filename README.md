@@ -1,16 +1,16 @@
 
-# PatchTST VaR/Volatility — SPY daily risk (VaR$_{0.95}$, variance)
+# PatchTST VaR/Volatility — SPY daily risk (VaR<sub>0.95</sub>, variance)
 
 PatchTST (quantile + variance heads) versus HAR-RV and GARCH(1,1)–t for **daily** SPY risk.
-Goal: forecast variance and produce a VaR$_{0.95}$ that **passes standard back-tests** with a leak-safe pipeline and exact reproduction.
+Goal: forecast variance and produce a VaR<sub>0.95</sub> that **passes standard back-tests** with a leak-safe pipeline and exact reproduction.
 
 ![VaR95 breach timeline](figs/var_breach_timeline.png)
 
 ## Headline results (holdout 2023-01-02 → 2025-07-31)
 
-* **VaR$_{0.95}$ (PatchTST, calibrated):**
-  exceptions **6.85%** (breach rate), **Kupiec p≈0.277**, **Christoffersen p≈0.325**, **effective N=394**.
-  Last-250 breaches: **20**, inside the 95% acceptance band **\[6–20]**.
+* **VaR<sub>0.95</sub> (PatchTST, calibrated):**
+  exceptions **6.85%** (breach rate), **Kupiec p≈0.277**, **Christoffersen p≈0.325**, **effective N<sub>eff</sub>=394**.
+  Last-250 breaches: **20**, inside the 95% acceptance band **[6–20]**.
   Calibration = **rolling 250-day intercept**, **EMA=0.0** (no smoothing). No look-ahead.
 
 * **Variance forecasting (holdout):**
@@ -18,7 +18,7 @@ Goal: forecast variance and produce a VaR$_{0.95}$ that **passes standard back-t
   **GARCH(1,1)–t** is weaker (**QLIKE ≈ −8.764**, **RMSE ≈ 2.289×10⁻⁴**).
   PatchTST’s variance head predictions are saved in `outputs/patch_preds.csv` (`sigma2_pred`) and can be evaluated with the same metrics.
 
-Interpretation: 6.85% vs a 5.0% target is within sampling error at $N_{\text{eff}}\!\approx\!394$ and **not rejected** by Kupiec/Christoffersen. If you want optics closer to 5%, use the same rolling calibration and remove EMA smoothing (as above) or move to a fixed 500-day intercept—both remain leak-safe.
+Interpretation: 6.85% vs a 5.0% target is within sampling error at N<sub>eff</sub> ≈ 394 and **not rejected** by Kupiec/Christoffersen. If you want optics closer to 5%, use the same rolling calibration and remove EMA smoothing (as above) or move to a fixed 500-day intercept—both remain leak-safe.
 
 ---
 
