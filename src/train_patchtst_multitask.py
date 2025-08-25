@@ -1,172 +1,183 @@
 #!/usr/bin/env python3
-import argparse, numpy as np, pandas as pd, torch
+"""
+Train a simple PatchTST-like multi-task model (quantile τ=0.05 + log-variance) and write holdout predictions.
+- Adds full reproducibility seeding.
+- Uses custom collate_fns to avoid default_collate choking on numpy.datetime64.
+- NO side effects on import.
+
+Usage:
+  python src/train_patchtst_multitask.py --npz outputs/spy_seq_120.npz --split_date 2023-01-02 --epochs 10
+"""
+from __future__ import annotations
+import argparse
+import os
+import random
 from pathlib import Path
+import numpy as np
+import pandas as pd
+import torch
 from torch import nn
 from torch.utils.data import Dataset, DataLoader
 import pytorch_lightning as pl
 
-def pinball_loss(y_hat, y, tau=0.05):
+
+def seed_everything(seed: int = 1337) -> None:
+    os.environ["PYTHONHASHSEED"] = str(seed)
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+    torch.use_deterministic_algorithms(True, warn_only=True)
+
+
+def pinball_loss(y_hat: torch.Tensor, y: torch.Tensor, tau: float = 0.05) -> torch.Tensor:
     e = y - y_hat
-    return torch.mean(torch.maximum(tau*e, (tau-1)*e))
+    return torch.mean(torch.maximum(tau * e, (tau - 1.0) * e))
+
 
 class SeqDataset(Dataset):
-    """
-    Loads outputs/<sym>_seq_<L>.npz with arrays:
-      X (N,T,2) features: [ret, sigma_gk]
-      y_ret (N,) next-day return
-      y_lrv (N,) next-day log RV
-      dates (N,) window target dates
-    Splits by date; computes z-score scaling from TRAIN split only.
-    """
-    def __init__(self, npz_path, split_date=None, train=True):
+    def __init__(self, npz_path: str, split_date: str | None, train: bool, seq_len: int | None = None):
         z = np.load(npz_path, allow_pickle=True)
         self.X = z["X"].astype(np.float32)
         self.y_ret = z["y_ret"].astype(np.float32)
-        self.y_lrv = z["y_lrv"].astype(np.float32)
+        self.y_lrv = z["y_lrv"].astype(np.float32)  # log variance
         self.dates = z["dates"].astype("datetime64[D]")
+        if seq_len is not None and self.X.shape[1] != seq_len:
+            raise ValueError(f"seq_len mismatch: data has {self.X.shape[1]}, arg was {seq_len}")
         if split_date is None:
-            split = int(len(self.X)*0.8)
-            self.train_idx = np.arange(split)
-            self.val_idx   = np.arange(split, len(self.X))
+            split = int(0.8 * len(self.X))
+            idx_tr = np.arange(split)
+            idx_te = np.arange(split, len(self.X))
         else:
             d = np.datetime64(split_date)
-            self.train_idx = np.where(self.dates < d)[0]
-            self.val_idx   = np.where(self.dates >= d)[0]
-        self.train = train
-        # fit scaler on train subset
-        mu = self.X[self.train_idx].mean(axis=(0,1), keepdims=True)
-        sd = self.X[self.train_idx].std(axis=(0,1), keepdims=True) + 1e-8
-        self.mu, self.sd = mu.astype(np.float32), sd.astype(np.float32)
+            idx_tr = np.where(self.dates < d)[0]
+            idx_te = np.where(self.dates >= d)[0]
+        self.idx = idx_tr if train else idx_te
 
-    def __len__(self):
-        idx = self.train_idx if self.train else self.val_idx
-        return len(idx)
+    def __len__(self) -> int:
+        return len(self.idx)
 
-    def __getitem__(self, i):
-        idx = (self.train_idx if self.train else self.val_idx)[i]
-        x = (self.X[idx] - self.mu) / self.sd
-        return (torch.from_numpy(x),
-                torch.tensor(self.y_ret[idx]),
-                torch.tensor(self.y_lrv[idx]),
-                torch.tensor(idx, dtype=torch.long))
+    def __getitem__(self, i: int):
+        j = self.idx[i]
+        return self.X[j], self.y_ret[j], self.y_lrv[j], self.dates[j]
+
+
+def collate_train(batch):
+    """Custom collate that drops dates for training."""
+    X, y_ret, y_lrv, _ = zip(*batch)
+    X = torch.as_tensor(np.stack(X))
+    y_ret = torch.as_tensor(np.stack(y_ret))
+    y_lrv = torch.as_tensor(np.stack(y_lrv))
+    return X, y_ret, y_lrv, None
+
+
+def collate_with_dates(batch):
+    """Custom collate that returns dates as a plain Python list (avoids default_collate on datetime64)."""
+    X, y_ret, y_lrv, d = zip(*batch)
+    X = torch.as_tensor(np.stack(X))
+    y_ret = torch.as_tensor(np.stack(y_ret))
+    y_lrv = torch.as_tensor(np.stack(y_lrv))
+    d = list(d)  # list of numpy.datetime64[D]
+    return X, y_ret, y_lrv, d
+
 
 class PatchTSTMulti(pl.LightningModule):
-    def __init__(self, seq_len=120, n_feat=2, patch_len=20, d_model=64, nhead=4, nlayers=2, dropout=0.1,
-                 lr=1e-3, tau=0.05, beta=0.3, pad_left=True):
+    def __init__(self, seq_len=120, n_feat=2, patch_len=20, d_model=64, nhead=4, nlayers=2, dropout=0.1, lr=1e-3, tau=0.05, w_q=1.0, w_v=1.0):
         super().__init__()
         self.save_hyperparameters()
-        self.tau, self.lr, self.beta = tau, lr, beta
-        L = seq_len
-        self.pad = (patch_len - (L % patch_len)) % patch_len if pad_left else 0
-        L_eff = L + self.pad
-        self.n_patches = L_eff // patch_len
+        self.tau = tau
+        self.lr = lr
+        self.w_q = w_q
+        self.w_v = w_v
+        pad = (patch_len - (seq_len % patch_len)) % patch_len
+        L = seq_len + pad
+        self.n_patches = L // patch_len
         self.patch_len = patch_len
-        self.pad_left = pad_left
+        self.pad = pad
+        self.n_feat = n_feat
 
-        self.proj = nn.Linear(n_feat*patch_len, d_model)
-        enc_layer = nn.TransformerEncoderLayer(d_model=d_model, nhead=nhead, dim_feedforward=4*d_model,
-                                               batch_first=True, dropout=dropout, activation="gelu")
+        self.proj = nn.Linear(n_feat * patch_len, d_model)
+        enc_layer = nn.TransformerEncoderLayer(d_model=d_model, nhead=nhead, dropout=dropout, batch_first=True)
         self.encoder = nn.TransformerEncoder(enc_layer, num_layers=nlayers)
-        self.head_q = nn.Sequential(nn.LayerNorm(d_model), nn.Linear(d_model, 1))   # q05 return
-        self.head_v = nn.Sequential(nn.LayerNorm(d_model), nn.Linear(d_model, 1))   # log variance
+        self.head_q = nn.Linear(d_model, 1)
+        self.head_lrv = nn.Linear(d_model, 1)
 
-    def forward(self, x):
-        # x expected (B, T, F). If a stray dim sneaks in (e.g., (B,1,T,F)), squeeze it.
-        if x.dim() > 3:
-            x = x.view(x.shape[0], x.shape[-2], x.shape[-1])
-        B, T, F = x.size(0), x.size(1), x.size(2)
+        self.mse = nn.MSELoss()
 
-        # left-pad to make T divisible by patch_len
+    def forward(self, x: torch.Tensor):
         if self.pad:
-            pad = torch.zeros(B, self.pad, F, device=x.device, dtype=x.dtype)
+            pad = torch.zeros((x.size(0), self.pad, x.size(2)), device=x.device, dtype=x.dtype)
             x = torch.cat([pad, x], dim=1)
-            T = x.size(1)
-
-        # patchify: (B, P, patch_len*F)
-        x = x.view(B, self.n_patches, self.patch_len, F).contiguous().view(B, self.n_patches, -1)
+        B, L, F = x.shape
+        x = x.reshape(B, self.n_patches, self.patch_len * F)
         x = self.proj(x)
-        x = self.encoder(x)
-        h = x.mean(dim=1)
-        q05 = self.head_q(h).squeeze(-1)
-        lrv = self.head_v(h).squeeze(-1)
-        return q05, lrv
+        z = self.encoder(x)
+        z = z.mean(dim=1)
+        q = self.head_q(z).squeeze(-1)
+        lrv = self.head_lrv(z).squeeze(-1)
+        return q, lrv
 
-
-    def training_step(self, batch, _):
-        x, y_ret, y_lrv, _ = batch
-        q05, lrv_hat = self(x)
-        loss_q = pinball_loss(q05, y_ret, self.hparams.tau)
-        loss_v = torch.mean((lrv_hat - y_lrv)**2)
-        loss = loss_q + self.hparams.beta * loss_v
-        self.log_dict({"train_pinball":loss_q, "train_mse_lrv":loss_v, "train_loss":loss}, prog_bar=True)
+    def training_step(self, batch, batch_idx):
+        X, y_ret, y_lrv, _ = batch
+        qhat, lrvhat = self(X)
+        loss_q = pinball_loss(qhat, y_ret, self.tau)
+        loss_v = self.mse(lrvhat, y_lrv)
+        loss = self.w_q * loss_q + self.w_v * loss_v
+        self.log_dict({"train_loss": loss, "loss_q": loss_q, "loss_v": loss_v}, prog_bar=True)
         return loss
 
-    def validation_step(self, batch, _):
-        x, y_ret, y_lrv, idx = batch
-        q05, lrv_hat = self(x)
-        loss_q = pinball_loss(q05, y_ret, self.hparams.tau)
-        loss_v = torch.mean((lrv_hat - y_lrv)**2)
-        loss = loss_q + self.hparams.beta * loss_v
-        self.log_dict({"val_pinball":loss_q, "val_mse_lrv":loss_v, "val_loss":loss}, prog_bar=True)
-        return {"q05": q05.detach(), "lrv_hat": lrv_hat.detach(), "y_ret": y_ret.detach(), "y_lrv": y_lrv.detach(), "idx": idx.detach()}
-
     def configure_optimizers(self):
-        return torch.optim.AdamW(self.parameters(), lr=self.lr)
+        return torch.optim.Adam(self.parameters(), lr=self.lr)
 
-def train(npz_path, split_date, out_csv, epochs=80, batch=64, num_workers=2, **h):
-    ds_tr = SeqDataset(npz_path, split_date, train=True)
-    ds_va = SeqDataset(npz_path, split_date, train=False)
-    train_dl = DataLoader(ds_tr, batch_size=batch, shuffle=True, drop_last=True, num_workers=num_workers)
-    val_dl   = DataLoader(ds_va, batch_size=batch, shuffle=False, num_workers=num_workers)
 
-    model = PatchTSTMulti(**h)
-    ckpt = pl.callbacks.ModelCheckpoint(monitor="val_loss", mode="min", save_top_k=1)
-    trainer = pl.Trainer(max_epochs=epochs, log_every_n_steps=10, callbacks=[ckpt],
-                         enable_checkpointing=True, accelerator="auto", devices=1)
-    trainer.fit(model, train_dl, val_dl)
-    best = ckpt.best_model_path or ckpt.last_model_path
-    print("Best ckpt:", best)
+def train(npz_path: str, split_date: str | None, out_csv: str, epochs=10, batch=64, seed=1337,
+          seq_len=120, n_feat=2, patch_len=20, d_model=64, nhead=4, nlayers=2, dropout=0.1, lr=1e-3, tau=0.05, w_q=1.0, w_v=1.0) -> None:
+    seed_everything(seed)
 
-    # write validation predictions aligned to dates
-    z = np.load(npz_path, allow_pickle=True)
-    dates = z["dates"]
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    model = PatchTSTMulti.load_from_checkpoint(best, **h).to(device)
+    ds_tr = SeqDataset(npz_path, split_date, train=True, seq_len=seq_len)
+    ds_te = SeqDataset(npz_path, split_date, train=False, seq_len=seq_len)
+    dl_tr = DataLoader(ds_tr, batch_size=batch, shuffle=True, num_workers=0, collate_fn=collate_train)
+    dl_te = DataLoader(ds_te, batch_size=batch, shuffle=False, num_workers=0, collate_fn=collate_with_dates)
+
+    model = PatchTSTMulti(seq_len=seq_len, n_feat=n_feat, patch_len=patch_len, d_model=d_model,
+                          nhead=nhead, nlayers=nlayers, dropout=dropout, lr=lr, tau=tau, w_q=w_q, w_v=w_v)
+
+    trainer = pl.Trainer(max_epochs=epochs, log_every_n_steps=10, enable_checkpointing=False, enable_model_summary=False)
+    trainer.fit(model, dl_tr)
+
+    # Predict on holdout
     model.eval()
-    idx_list, q_list, v_list, yret_list = [], [], [], []
+    preds_q, preds_lrv, dates, y_true = [], [], [], []
     with torch.no_grad():
-        for xb, yret, ylv, ib in val_dl:
-            xb = xb.to(device)
-            q05, lrv_hat = model(xb)
-            idx_list.append(ib.numpy())
-            q_list.append(q05.cpu().numpy())
-            v_list.append(lrv_hat.cpu().numpy())
-            yret_list.append(yret.cpu().numpy())
-    idx = np.concatenate(idx_list)
-    qv  = np.concatenate(q_list).ravel()
-    lv  = np.concatenate(v_list).ravel()
-    yrv = np.concatenate(yret_list).ravel()
-    ord = np.argsort(idx)
+        for X, y_ret, y_lrv, d in dl_te:
+            q, lrv = model(X)
+            preds_q.extend(q.cpu().numpy().tolist())
+            preds_lrv.extend(lrv.cpu().numpy().tolist())
+            dates.extend(d)  # list of numpy.datetime64[D]
+            y_true.extend(y_ret.cpu().numpy().tolist())
 
-    df = pd.DataFrame({
-        "date": dates[ds_va.val_idx][ord].astype("datetime64[D]"),
-        "ret_true": yrv[ord],
-        "q05_ret_pred": qv[ord],
-        "sigma2_pred": np.exp(lv[ord])  # back-transform log variance -> variance
+    sigma2 = np.exp(np.array(preds_lrv, dtype=np.float64))  # ensure positivity
+    date_arr = np.array(dates, dtype="datetime64[D]")
+    out = pd.DataFrame({
+        "date": date_arr,
+        "ret_true": y_true,
+        "q05_ret_pred": preds_q,
+        "sigma2_pred": sigma2,
     })
-    Path("outputs").mkdir(exist_ok=True, parents=True)
-    df.to_csv(out_csv, index=False)
-    print(f"Wrote {out_csv} with {len(df)} rows")
+    Path(out_csv).parent.mkdir(parents=True, exist_ok=True)
+    out.to_csv(out_csv, index=False)
+    print(f"Wrote {out_csv}  (rows={len(out)})")
+
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
-    ap.add_argument("--symbol", default="SPY")
-    ap.add_argument("--seq_len", type=int, default=120)
-    ap.add_argument("--split_date", default="2023-01-02")
-    ap.add_argument("--epochs", type=int, default=80)
+    ap.add_argument("--npz", default="outputs/spy_seq_120.npz")
+    ap.add_argument("--split_date", default=None, help="YYYY-MM-DD; if omitted, 80/20 split")
+    ap.add_argument("--out_csv", default="outputs/patch_preds.csv")
+    ap.add_argument("--epochs", type=int, default=10)
     ap.add_argument("--batch", type=int, default=64)
-    ap.add_argument("--num_workers", type=int, default=2)
-    # model hparams
+    ap.add_argument("--seq_len", type=int, default=120)
     ap.add_argument("--patch_len", type=int, default=20)
     ap.add_argument("--d_model", type=int, default=64)
     ap.add_argument("--nhead", type=int, default=4)
@@ -174,12 +185,11 @@ if __name__ == "__main__":
     ap.add_argument("--dropout", type=float, default=0.1)
     ap.add_argument("--lr", type=float, default=1e-3)
     ap.add_argument("--tau", type=float, default=0.05)
-    ap.add_argument("--beta", type=float, default=0.3, help="weight for variance-head MSE")
+    ap.add_argument("--w_q", type=float, default=1.0)
+    ap.add_argument("--w_v", type=float, default=1.0)
+    ap.add_argument("--seed", type=int, default=1337)
     args = ap.parse_args()
 
-    npz = f"outputs/{args.symbol.lower()}_seq_{args.seq_len}.npz"
-    out_csv = "outputs/patch_preds.csv"
-    train(npz, args.split_date, out_csv, epochs=args.epochs, batch=args.batch, num_workers=args.num_workers,
+    train(args.npz, args.split_date, args.out_csv, epochs=args.epochs, batch=args.batch, seed=args.seed,
           seq_len=args.seq_len, n_feat=2, patch_len=args.patch_len, d_model=args.d_model,
-          nhead=args.nhead, nlayers=args.nlayers, dropout=args.dropout, lr=args.lr,
-          tau=args.tau, beta=args.beta)
+          nhead=args.nhead, nlayers=args.nlayers, dropout=args.dropout, lr=args.lr, tau=args.tau, w_q=args.w_q, w_v=args.w_v)

@@ -1,0 +1,12 @@
+numpy>=1.23
+pandas>=1.5
+matplotlib>=3.7
+scipy>=1.10
+statsmodels>=0.13
+torch>=2.1
+pytorch-lightning>=2.0
+arch>=6.2
+yfinance>=0.2
+pandas-market-calendars>=4.3
+pyarrow
+fastparquet

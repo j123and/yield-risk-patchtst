@@ -6,5 +6,6 @@ outputs/*.npz
 logs/
 .DS_Store
 data/
-
-data/
+tables/**
+data/**
+docs/var_decision_memo.md
