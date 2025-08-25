@@ -1,16 +1,16 @@
 {
-  "oos_rmse": 0.0001710280603476403,
-  "oos_qlike": -8.833918632536731,
+  "oos_rmse": 0.00017102806034764004,
+  "oos_qlike": -8.833918632536733,
   "holdout_start": "2023-01-02",
-  "holdout_rmse": 0.00013542607104690248,
-  "holdout_qlike": -8.957591362529246,
+  "holdout_rmse": 0.0001354260710469024,
+  "holdout_qlike": -8.957591362529248,
   "min_train_days": 500,
   "garch_t": {
-    "oos_rmse": 0.0002512625040928818,
-    "oos_qlike": -8.603244025955563,
+    "oos_rmse": 0.00025126414963591294,
+    "oos_qlike": -8.603243169874304,
     "holdout_start": "2023-01-02",
-    "holdout_rmse": 0.00022890610678710698,
-    "holdout_qlike": -8.763881826630945,
+    "holdout_rmse": 0.00022890783903358044,
+    "holdout_qlike": -8.763879696783412,
     "min_train_days": 500,
     "refit_step": 20
   }

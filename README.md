@@ -1,4 +1,3 @@
-
 # PatchTST VaR/Volatility — SPY daily risk (VaR<sub>0.95</sub>, variance)
 
 PatchTST (quantile + variance heads) versus HAR-RV and GARCH(1,1)–t for **daily** SPY risk.
@@ -8,11 +7,12 @@ Goal: forecast variance and produce a VaR<sub>0.95</sub> that **passes standard 
 
 ## Headline results (holdout 2023-01-02 → 2025-07-31)
 
+<!-- VAR_HEAD_START -->
 * **VaR<sub>0.95</sub> (PatchTST, calibrated):**
   exceptions **6.85%** (breach rate), **Kupiec p≈0.277**, **Christoffersen p≈0.325**, **effective N<sub>eff</sub>=394**.
   Last-250 breaches: **20**, inside the 95% acceptance band **[6–20]**.
-  Calibration = **rolling 250-day intercept**, **EMA=0.0** (no smoothing). No look-ahead.
-
+  Calibration = **rolling 250-day intercept, EMA=0.0 (no smoothing). No look-ahead.**
+<!-- VAR_HEAD_END -->
 * **Variance forecasting (holdout):**
   **HAR-RV** achieves **QLIKE ≈ −8.958**, **RMSE ≈ 1.354×10⁻⁴**.
   **GARCH(1,1)–t** is weaker (**QLIKE ≈ −8.764**, **RMSE ≈ 2.289×10⁻⁴**).
@@ -76,9 +76,8 @@ If you don’t have CUDA, training still runs on CPU (slower but fine for this d
   * This is **leak-safe** (uses only the past window at each step).
 
 * **Back-tests (what matters)**
-
-  * **Kupiec LR$_\text{uc}$** for unconditional coverage (breach rate ≈ $\alpha$).
-  * **Christoffersen LR$_\text{cc}$** for independence (no clustering of breaches).
+  * **Kupiec LR<sub>uc</sub>** for unconditional coverage (breach rate ≈ α).
+  * **Christoffersen LR<sub>cc</sub>** for independence (no clustering of breaches).
   * **Binomial acceptance band** shown for the last 250 days.
 
 * **Baselines**

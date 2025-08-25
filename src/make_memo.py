@@ -1,62 +1,102 @@
 #!/usr/bin/env python3
 """
 Generate a brief decision memo from the evaluation CSVs.
-- NO side effects on import.
-- Usage:
-    python src/make_memo.py --out docs/var_decision_memo.md
+
+Fixes vs prior version:
+- Explicitly picks the rolling-calibrated Patch row (not raw).
+- Reports VaR *exceptions* (breach rate), not coverage.
+- Correctly marks last-250 membership as ∈ or ∉ the acceptance band.
+- Uses timezone-aware date (no deprecation warning).
 """
 from __future__ import annotations
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, UTC
 import argparse
+import re
 import pandas as pd
 
 
+def _pick_patch_row(bt: pd.DataFrame) -> pd.Series:
+    """Prefer rolling-calibrated Patch row; then fixed; then raw."""
+    if bt.empty:
+        raise ValueError("tables/var_backtest.csv is empty")
+
+    # Normalize string columns for robust matching
+    bt_norm = bt.copy()
+    for col in ("model", "mode"):
+        if col in bt_norm.columns:
+            bt_norm[col] = bt_norm[col].astype(str).str.lower()
+
+    # Priority order
+    prefs = [
+        ("mode", "rolling"),
+        ("model", "patch_cal"),
+        ("mode", "fixed"),
+        ("model", "patch_fixed"),
+        ("mode", "none"),
+        ("model", "patch_raw"),
+    ]
+    for col, val in prefs:
+        if col in bt_norm.columns:
+            hit = bt_norm[bt_norm[col] == val]
+            if not hit.empty:
+                return bt.loc[hit.index[0]]
+
+    # Fallback: first row
+    return bt.iloc[0]
+
+
+def _parse_band(band_str: str) -> tuple[int | None, int | None]:
+    """Parse '6–20' or '6-20' → (6, 20); return (None, None) if not parseable."""
+    if not isinstance(band_str, str):
+        return None, None
+    s = band_str.strip().replace("–", "-")
+    m = re.match(r"^\s*(\d+)\s*-\s*(\d+)\s*$", s)
+    if not m:
+        return None, None
+    lo, hi = int(m.group(1)), int(m.group(2))
+    return lo, hi
+
+
 def build_memo(err: pd.DataFrame, bt: pd.DataFrame) -> str:
-    # Pick best variance model by QLIKE (lower is better)
-    best_var = err.sort_values("QLIKE").iloc[0] if "QLIKE" in err else None
+    # Choose the Patch row to report (rolling if available)
+    row = _pick_patch_row(bt)
 
-    # Patch (calibrated) VaR row if present
-    patch_row = None
-    if "model" in bt.columns:
-        rows = bt.loc[bt["model"].astype(str).str.contains("Patch", case=False, na=False)]
-        if not rows.empty:
-            patch_row = rows.sort_values("coverage_diff_abs").iloc[0] if "coverage_diff_abs" in rows else rows.iloc[0]
+    # Extract metrics with safe fallbacks
+    br = float(row.get("breach_rate", float("nan")))   # exceptions
+    cov = float(row.get("coverage", float("nan")))
+    kup = float(row.get("kupiec_p", float("nan")))
+    chi = float(row.get("christoffersen_p", float("nan")))
+    eff_n = int(row.get("effective_n", 0))
+    last250 = int(row.get("last250_breaches", 0))
+    band_str = str(row.get("band_95pct", "") or "")
+    lo, hi = _parse_band(band_str)
+    in_band = (lo is not None and hi is not None and lo <= last250 <= hi)
+    membership = "∈" if in_band else "∉"
 
-    now = datetime.utcnow().strftime("%Y-%m-%d")
-
-    va_line = ""
-    if patch_row is not None:
-        kupiec_p = patch_row.get("kupiec_p", float("nan"))
-        christ_p = patch_row.get("christoffersen_p", float("nan"))
-        cov = patch_row.get("coverage", float("nan"))
-        last250 = patch_row.get("last250_breaches", "")
-        band = patch_row.get("band_95pct", "")
-        eff_n = patch_row.get("effective_n", "")
-        va_line = (
-            f"- VaR95 (PatchTST calibrated): coverage {cov:.2%} "
-            f"(Kupiec p≈{float(kupiec_p):.3f}, Christoffersen p≈{float(christ_p):.3f}); "
-            f"last-250 breaches {last250} ∈ {band}; effective N={eff_n}."
-        )
-
+    # Variance model summary (best QLIKE if present)
     var_line = ""
-    if best_var is not None:
+    if not err.empty:
+        err_sorted = err.sort_values("QLIKE") if "QLIKE" in err.columns else err
+        best = err_sorted.iloc[0]
         var_line = (
-            f"- Variance: {best_var.get('model','(unknown)')} "
-            f"RMSE≈{float(best_var.get('RMSE', float('nan'))):.6e}, "
-            f"QLIKE≈{float(best_var.get('QLIKE', float('nan'))):.3f}."
+            f"- Variance: {best.get('model','HAR')} "
+            f"RMSE≈{float(best.get('RMSE', float('nan'))):.6e}, "
+            f"QLIKE≈{float(best.get('QLIKE', float('nan'))):.3f}."
         )
+
+    today = datetime.now(UTC).date().isoformat()
 
     md = f"""# Intraday Volatility → VaR/ES – Decision Memo (Provisional)
 
-**Date:** {now}
+**Date:** {today}
 
 ## Headline
-{va_line}
+- VaR95 (PatchTST calibrated): exceptions {br*100:.2f}% (Kupiec p≈{kup:.3f}, Christoffersen p≈{chi:.3f}); last-250 breaches {last250} {membership} [{band_str}]; effective N={eff_n}.
 {var_line}
 
 ## Notes
-- VaR calibration: rolling 250-day intercept on residuals, EMA=0.20; stats reported after warm-up.
+- VaR calibration: rolling intercept on residuals (see eval configs); stats reported after warm-up.
 - σ² evaluated with RMSE and QLIKE on holdout.
 - No look-ahead in sequence construction.
 
@@ -66,7 +106,7 @@ def build_memo(err: pd.DataFrame, bt: pd.DataFrame) -> str:
 
 
 def main(out_path: str = "docs/var_decision_memo.md") -> None:
-    err = pd.read_csv("tables/error_metrics.csv")
+    err = pd.read_csv("tables/error_metrics.csv") if Path("tables/error_metrics.csv").exists() else pd.DataFrame()
     bt = pd.read_csv("tables/var_backtest.csv")
     md = build_memo(err, bt)
     Path(out_path).parent.mkdir(parents=True, exist_ok=True)
