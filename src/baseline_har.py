@@ -62,7 +62,7 @@ def rmse(y_true, y_pred) -> float:
     return float(np.sqrt(np.mean((y_true - y_pred) ** 2)))
 
 def qlike(y_true, y_pred) -> float:
-    # standard variance QLIKE: log σ² + y/σ²
+    # standard variance QLIKE
     y_true = np.asarray(y_true, dtype=float) + EPS
     y_pred = np.asarray(y_pred, dtype=float) + EPS
     return float(np.mean(np.log(y_pred) + y_true / y_pred))
