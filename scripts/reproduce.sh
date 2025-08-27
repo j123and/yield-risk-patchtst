@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # Reproduce SPY VaR/volatility results end-to-end.
-# Ingest → audit → sequences → train PatchTST (quant + multitask) → baselines → eval → memo.
+# Ingest -> audit -> sequences -> train PatchTST (quant + multitask) -> baselines -> eval -> memo.
 # Uses rolling VaR calibration (since eval_phase4.py supports: fixed|rolling|none).
 set -euo pipefail
 
-# ---- defaults (override via flags) ----
+#defaults
 SYMBOL="SPY"
 START="2015-01-02"
 END="2025-07-31"
@@ -23,7 +23,7 @@ CALIB_WINDOW=250
 ROLL_WINDOW=250
 CALIB_EMA=0.20
 
-# ---- paths ----
+#  paths 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DATA_DIR="${ROOT_DIR}/data"
 OUT_DIR="${ROOT_DIR}/outputs"
@@ -36,7 +36,7 @@ SYMBOL_LC="$(echo "${SYMBOL}" | tr '[:upper:]' '[:lower:]')"
 NPZ_DEFAULT="${OUT_DIR}/${SYMBOL_LC}_seq_${SEQ_LEN}.npz"
 PATCH_PREDS="${OUT_DIR}/patch_preds.csv"
 
-# ---- helpers ----
+#  helpers 
 usage() {
   cat <<EOF
 Usage: $(basename "$0") [options]
@@ -55,7 +55,7 @@ EOF
 die() { echo "ERROR: $*" >&2; exit 1; }
 run() { echo "+ $*"; "$@"; }
 
-# ---- parse args ----
+#  parse args 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --symbol) SYMBOL="$2"; shift 2;;
@@ -78,7 +78,7 @@ NPZ_DEFAULT="${OUT_DIR}/${SYMBOL_LC}_seq_${SEQ_LEN}.npz"
 
 mkdir -p "${DATA_DIR}" "${OUT_DIR}" "${TAB_DIR}" "${FIG_DIR}" "${DOC_DIR}"
 
-# ---- reproducibility env (training scripts also seed internally) ----
+#  reproducibility env (training scripts also seed internally) 
 export PYTHONHASHSEED="${SEED}"
 export CUBLAS_WORKSPACE_CONFIG=":16:8"
 export CUDA_LAUNCH_BLOCKING=1
