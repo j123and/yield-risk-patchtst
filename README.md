@@ -16,7 +16,7 @@ Goal: forecast variance and produce a VaR at 95% (α=0.05, left tail) that meets
   Calibration = rolling 250-day intercept, EMA=0.0 (no smoothing). No look-ahead.
 <!-- VAR_HEAD_END -->
 
-**Variance forecasting **  
+**Variance forecasting**  
 • HAR-RV: Avg log-likelihood = −8.958 (higher is better for this metric), RMSE = 1.354×10⁻⁴ (units: variance of daily returns).  
 • GARCH(1,1)–t: Avg log-likelihood = −8.764, RMSE = 2.289×10⁻⁴.  
 • PatchTST variance-head predictions are saved in `outputs/patch_preds.csv` (`sigma2_pred`) and can be scored with the same metrics.
