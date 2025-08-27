@@ -1,15 +1,13 @@
 #!/usr/bin/env python3
 """
-Evaluate VaR (alpha) for PatchTST predictions with optional calibration:
+Evaluate Value at Risk (VaR) at level alpha for PatchTST predictions with optional calibration:
   - none/raw
-  - fixed: one intercept delta from a calibration window
-  - rolling: time-varying intercept using a rolling past window (optional EMA smoothing)
+  - fixed: single intercept delta learned on a calibration window
+  - rolling: time-varying intercept from a rolling past window (optional EMA smoothing)
 
 Outputs:
   - tables/var_backtest.csv
   - figs/var_breach_timeline.png
-And prints:
-  PatchTST VaR95 exception_rate raw=..., fixed=..., rolling=... (N_eff=..., target=...)
 
 Assumes outputs/patch_preds.csv with:
   date (datetime-like), ret_true (float), q05_ret_pred (float), sigma2_pred (float, optional)
@@ -18,28 +16,29 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 from typing import Tuple, Optional
+
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+from scipy.stats import chi2, binom  # chi-squared survival + exact binomial interval
 
-try:
-    from scipy.stats import binom
-except Exception:
-    binom = None
 
 def _to_datetime(x: pd.Series) -> pd.Series:
     return pd.to_datetime(x).dt.tz_localize(None)
 
+
 def _exception_indicator(ret_true: np.ndarray, q_pred: np.ndarray) -> np.ndarray:
-    # VaR: exception if realized return is below predicted quantile
+    # VaR exception (breach) if realized return is below predicted α-quantile
     return (ret_true < q_pred).astype(np.int32)
+
 
 def _calibrate_fixed(ret: np.ndarray, q: np.ndarray, alpha: float, window: int):
     """
-    Use the first 'window' points to estimate a constant delta (α-quantile of residuals),
-    then score only on the post-warmup region.
+    Learn a constant delta as the alpha-quantile of residuals on the first `window` points,
+    then evaluate only on the post-warmup region.
     """
-    if len(ret) <= window:
+    n = len(ret)
+    if n <= window:
         exc = _exception_indicator(ret, q)
         rate = float(exc.mean()) if len(exc) else np.nan
         return exc, rate, len(exc)
@@ -50,10 +49,11 @@ def _calibrate_fixed(ret: np.ndarray, q: np.ndarray, alpha: float, window: int):
     rate = float(exc.mean()) if len(exc) else np.nan
     return exc, rate, len(exc)
 
+
 def _calibrate_rolling(ret: np.ndarray, q: np.ndarray, alpha: float, window: int, ema: Optional[float]):
     """
-    For each t >= window, estimate delta_t from the previous 'window' residuals.
-    Optionally smooth deltas via EMA (uses only past information).
+    For each t >= window, estimate delta_t from previous `window` residuals.
+    Optionally smooth deltas using an exponential moving average (EMA).
     """
     n = len(ret)
     if n <= window:
@@ -73,93 +73,123 @@ def _calibrate_rolling(ret: np.ndarray, q: np.ndarray, alpha: float, window: int
     rate = float(exc.mean()) if len(exc) else np.nan
     return exc, rate, len(exc)
 
-def kupiec_pvalue(exceptions: np.ndarray, alpha: float) -> float:
+
+def _lr_uc(ex: np.ndarray, alpha: float) -> float:
     """
-    Kupiec unconditional coverage test (LR_uc), χ²_1 tail.
+    Log-likelihood ratio for Kupiec unconditional coverage (UC).
+    Returns the LR statistic; p-value is chi2.sf(LR, df=1).
     """
-    n = len(exceptions)
+    e = np.asarray(ex, dtype=int)
+    n = int(e.size)
     if n == 0:
         return np.nan
-    x = int(exceptions.sum())
-    pi = x / n
-    if pi in (0.0, 1.0):
-        return 1.0 if abs(pi - alpha) < 1e-12 else 0.0
+    x = int(e.sum())
+    # log-likelihoods
     ll_alpha = (n - x) * np.log1p(-alpha) + x * np.log(alpha)
+    # guard against log(0) by clipping
+    eps = 1e-12
+    pi = min(max(x / n, eps), 1.0 - eps)
     ll_pi = (n - x) * np.log1p(-pi) + x * np.log(pi)
-    lr = -2.0 * (ll_alpha - ll_pi)
-    return float(np.exp(-lr / 2.0))  # χ²_1 survival
+    return -2.0 * (ll_alpha - ll_pi)
+
+
+def kupiec_pvalue(exceptions: np.ndarray, alpha: float) -> float:
+    """Kupiec UC p-value: tests if breach frequency equals alpha (χ² with df=1)."""
+    lr = _lr_uc(exceptions, alpha)
+    return float(chi2.sf(lr, df=1))
+
 
 def christoffersen_ind_pvalue(exceptions: np.ndarray) -> float:
     """
-    Christoffersen independence test (LR_ind), χ²_1 tail.
+    Christoffersen independence p-value: tests no clustering of breaches.
+    Uses χ² with df=1 on the LR_ind statistic.
     """
-    n = len(exceptions)
-    if n <= 1:
+    e = np.asarray(exceptions, dtype=int)
+    if e.size <= 1:
         return np.nan
-    e = exceptions.astype(int)
+
     n00 = n01 = n10 = n11 = 0
-    for i in range(1, n):
-        a, b = e[i - 1], e[i]
-        if a == 0 and b == 0: n00 += 1
+    for i in range(1, e.size):
+        a, b = int(e[i - 1]), int(e[i])
+        if   a == 0 and b == 0: n00 += 1
         elif a == 0 and b == 1: n01 += 1
         elif a == 1 and b == 0: n10 += 1
-        else: n11 += 1
+        else:                    n11 += 1
 
-    def ll(p, n0, n1):
-        if p in (0.0, 1.0):
-            if (p == 0.0 and n1 == 0) or (p == 1.0 and n0 == 0):
-                return 0.0
-            return -np.inf
-        return n0 * np.log1p(-p) + n1 * np.log(p)
+    n0 = n00 + n01
+    n1 = n10 + n11
+    total = n0 + n1
+    if total == 0:
+        return np.nan
 
-    total0 = n00 + n10
-    total1 = n01 + n11
-    pi = (total1 / (total0 + total1)) if (total0 + total1) > 0 else 0.0
-    pi01 = n01 / (n00 + n01) if (n00 + n01) > 0 else 0.0
-    pi11 = n11 / (n10 + n11) if (n10 + n11) > 0 else 0.0
+    pi01 = 0.0 if n0 == 0 else n01 / n0
+    pi11 = 0.0 if n1 == 0 else n11 / n1
+    pi1  = (n01 + n11) / total
 
-    ll_ind = ll(pi, total0, total1)
-    ll_dep = ll(pi01, n00, n01) + ll(pi11, n10, n11)
-    lr = -2.0 * (ll_ind - ll_dep)
-    return float(np.exp(-lr / 2.0))  # χ²_1 survival
+    def _ll(p, s, f):
+        eps = 1e-12
+        p = min(max(p, eps), 1.0 - eps)
+        return s * np.log(p) + f * np.log1p(-p)
+
+    ll_restricted   = _ll(pi1,  n01 + n11, n00 + n10)
+    ll_unrestricted = _ll(pi01, n01,       n00) + _ll(pi11, n11, n10)
+
+    lr_ind = -2.0 * (ll_restricted - ll_unrestricted)
+    return float(chi2.sf(lr_ind, df=1))
+
 
 def christoffersen_cc_pvalue(exceptions: np.ndarray, alpha: float) -> float:
     """
-    Christoffersen conditional coverage (LR_cc = LR_uc + LR_ind), χ²_2 tail.
+    Christoffersen conditional coverage p-value.
+    LR_cc = LR_uc + LR_ind, tested against χ² with df=2.
     """
-    if len(exceptions) == 0:
+    lr_uc = _lr_uc(exceptions, alpha)
+    # Recompute LR_ind to avoid numerical inversion from p
+    e = np.asarray(exceptions, dtype=int)
+    if e.size <= 1:
         return np.nan
-    lr_uc = -2.0 * np.log(kupiec_pvalue(exceptions, alpha) + 1e-300) * 0.0  # not directly; compute LR via counts
-    # recompute LR_uc directly to avoid numerical hacks:
-    n = len(exceptions); x = int(exceptions.sum()); pi = x / n if n > 0 else 0.0
-    if pi in (0.0, 1.0):
-        lr_uc = 0.0 if abs(pi - alpha) < 1e-12 else 1e9
-    else:
-        ll_alpha = (n - x) * np.log1p(-alpha) + x * np.log(alpha)
-        ll_pi = (n - x) * np.log1p(-pi) + x * np.log(pi)
-        lr_uc = -2.0 * (ll_alpha - ll_pi)
 
-    # LR_ind via the function above, but get back LR from its p:
-    p_ind = christoffersen_ind_pvalue(exceptions)
-    # invert p to LR: p = exp(-LR/2) ⇒ LR = -2 ln p
-    lr_ind = float(-2.0 * np.log(p_ind + 1e-300))
+    n00 = n01 = n10 = n11 = 0
+    for i in range(1, e.size):
+        a, b = int(e[i - 1]), int(e[i])
+        if   a == 0 and b == 0: n00 += 1
+        elif a == 0 and b == 1: n01 += 1
+        elif a == 1 and b == 0: n10 += 1
+        else:                    n11 += 1
+
+    n0 = n00 + n01
+    n1 = n10 + n11
+    total = n0 + n1
+    if total == 0:
+        return np.nan
+
+    pi01 = 0.0 if n0 == 0 else n01 / n0
+    pi11 = 0.0 if n1 == 0 else n11 / n1
+    pi1  = (n01 + n11) / total
+
+    def _ll(p, s, f):
+        eps = 1e-12
+        p = min(max(p, eps), 1.0 - eps)
+        return s * np.log(p) + f * np.log1p(-p)
+
+    ll_r  = _ll(pi1,  n01 + n11, n00 + n10)
+    ll_ur = _ll(pi01, n01,       n00) + _ll(pi11, n11, n10)
+    lr_ind = -2.0 * (ll_r - ll_ur)
 
     lr_cc = lr_uc + lr_ind
-    # χ²_2 survival ~ exp(-x/2) * (1 + x/2); but we’ll just use exp(-x/2) as a simple tail approx
-    return float(np.exp(-lr_cc / 2.0))
+    return float(chi2.sf(lr_cc, df=2))
+
 
 def last250_band(alpha: float, n: int = 250, conf: float = 0.95) -> Tuple[int, int]:
-    """Binomial acceptance band on last n points."""
+    """
+    Binomial acceptance band on last n points at confidence level `conf`.
+    What it tells: whether the count of recent breaches is consistent with alpha.
+    """
     if n <= 0:
         return (0, 0)
-    if binom is not None:
-        lo, hi = binom.interval(conf, n, alpha)
-        return int(lo), int(hi)
-    mu = n * alpha
-    sigma = np.sqrt(n * alpha * (1 - alpha))
-    lo = int(np.floor(mu - 1.96 * sigma))
-    hi = int(np.ceil(mu + 1.96 * sigma))
-    return max(0, lo), min(n, hi)
+    lo, hi = binom.interval(conf, n, alpha)
+    return int(lo), int(hi)
+
 
 def main():
     ap = argparse.ArgumentParser()
@@ -169,7 +199,7 @@ def main():
     ap.add_argument("--calib_mode", choices=["fixed", "rolling", "none"], default="none")
     ap.add_argument("--calib_window", type=int, default=250)
     ap.add_argument("--roll_window", type=int, default=250)
-    ap.add_argument("--calib_ema", type=float, default=0.0)  # README uses 0.0
+    ap.add_argument("--calib_ema", type=float, default=0.0)  # exponential moving average weight
     args = ap.parse_args()
 
     ROOT = Path(".")
@@ -188,9 +218,6 @@ def main():
     df = df.sort_values("date")
     if args.holdout_start:
         df = df[df["date"] >= pd.to_datetime(args.holdout_start)]
-    df = df.reset_index(drop=True)
-
-    # drop NaNs to keep N_eff honest
     df = df.dropna(subset=["ret_true", "q05_ret_pred"]).reset_index(drop=True)
 
     ret = df["ret_true"].to_numpy(dtype=np.float64)
@@ -257,6 +284,7 @@ def main():
     print(f"             Christoffersen p (cc)  raw={cc_raw:.3f}, fixed={cc_fix:.3f}, rolling={cc_roll:.3f}")
     print(f"             last-{n_band} breaches (rolling) = {last250} in [{band_str}]")
     print(f"Wrote {table_path}")
+
 
 if __name__ == "__main__":
     main()
