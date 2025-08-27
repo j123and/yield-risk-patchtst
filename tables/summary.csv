@@ -1,2 +1,0 @@
-symbol,rows_after_clean,date_start,date_end,missing_trading_days,missing_mode,duplicates_dropped,rv_mean,rv_median,rv_p95,adf_pvalue_logrv,adf_nobs
-SPY,2659,2015-01-02,2025-07-30,0,XNYS calendar,0,7.70293247217321e-05,3.0037675832006133e-05,0.0002520043756471375,2.619058984389505e-08,2659
