@@ -1,9 +1,9 @@
-# PatchTST VaR/Volatility — SPY daily risk (VaR₀.₉₅ and variance)
+# PatchTST VaR/Volatility: SPY daily risk (VaR 0.95 and variance)
 
 PatchTST (quantile + variance heads) versus HAR-RV and GARCH(1,1)–t for **daily** SPY risk.
 Goal: forecast variance and produce a **VaR at 95%** (α=0.05, left tail) that meets standard back-tests with a leak-safe, reproducible pipeline.
 
-![VaR₀.₉₅ breach timeline](figs/var_breach_timeline.png)
+![VaR 0.95 breach timeline](figs/var_breach_timeline.png)
 
 *Figure: Breach timeline for α=0.05. Shaded band shows the 95% Binomial acceptance range on the **last 250 days**.*
 
@@ -11,17 +11,17 @@ Goal: forecast variance and produce a **VaR at 95%** (α=0.05, left tail) that m
 
 <!-- VAR_HEAD_START -->
 * **VaR<sub>0.95</sub> (PatchTST, calibrated):**
-  exceptions **6.60%** (breach rate), **Kupiec p≈0.380**, **Christoffersen (ind) p≈0.631**, **effective N<sub>eff</sub>=394**.
+  exceptions **6.60%** (breach rate), **Kupiec p=0.380**, **Christoffersen (ind) p=0.631**, **effective N<sub>eff</sub>=394**.
   Last-250 breaches: **20**, inside the 95% acceptance band **[6–20]**.
   Calibration = **rolling 250-day intercept, EMA=0.0 (no smoothing). No look-ahead.**
 <!-- VAR_HEAD_END -->
 
 **Variance forecasting (holdout)**  
-• **HAR-RV**: **Avg log-likelihood ≈ −8.958** (higher is better for this metric), **RMSE ≈ 1.354×10⁻⁴** (units: variance of daily returns).  
-• **GARCH(1,1)–t**: **Avg log-likelihood ≈ −8.764**, **RMSE ≈ 2.289×10⁻⁴**.  
+• **HAR-RV**: **Avg log-likelihood = −8.958** (higher is better for this metric), **RMSE = 1.354×10⁻⁴** (units: variance of daily returns).  
+• **GARCH(1,1)–t**: **Avg log-likelihood = −8.764**, **RMSE = 2.289×10⁻⁴**.  
 • PatchTST variance-head predictions are saved in `outputs/patch_preds.csv` (`sigma2_pred`) and can be scored with the same metrics.
 
-Interpretation: With **N_eff ≈ 394**, a 6.85% breach rate is within sampling noise for α=0.05 and is **not rejected** by LR_uc or LR_ind. If you want a breach rate closer to 5% for optics, keep the rolling intercept but **increase the window** (e.g., 500 days) or switch to a **fixed intercept** calibrated on a pre-holdout window. Both are leak-safe if they use only past data.
+Interpretation: With **N_eff = 394**, a 6.85% breach rate is within sampling noise for α=0.05 and is **not rejected** by LR_uc or LR_ind. If you want a breach rate closer to 5% for optics, keep the rolling intercept but **increase the window** (e.g., 500 days) or switch to a **fixed intercept** calibrated on a pre-holdout window. Both are leak-safe if they use only past data.
 
 ---
 
