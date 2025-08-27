@@ -1,27 +1,27 @@
 # PatchTST VaR/Volatility: SPY daily risk (VaR 0.95 and variance)
 
-PatchTST (quantile + variance heads) versus HAR-RV and GARCH(1,1)–t for **daily** SPY risk.
-Goal: forecast variance and produce a **VaR at 95%** (α=0.05, left tail) that meets standard back-tests with a leak-safe, reproducible pipeline.
+PatchTST (quantile + variance heads) versus HAR-RV and GARCH(1,1)–t for daily SPY risk.
+Goal: forecast variance and produce a VaR at 95% (α=0.05, left tail) that meets standard back-tests with a leak-safe, reproducible pipeline.
 
 ![VaR 0.95 breach timeline](figs/var_breach_timeline.png)
 
-*Figure: Breach timeline for α=0.05. Shaded band shows the 95% Binomial acceptance range on the **last 250 days**.*
+*Figure: Breach timeline for α=0.05. Shaded band shows the 95% Binomial acceptance range on the last 250 days.*
 
 ## Headline results (holdout 2023-01-02 → 2025-07-31)
 
 <!-- VAR_HEAD_START -->
-* **VaR<sub>0.95</sub> (PatchTST, calibrated):**
-  exceptions **6.60%** (breach rate), **Kupiec p=0.380**, **Christoffersen (ind) p=0.631**, **effective N<sub>eff</sub>=394**.
-  Last-250 breaches: **20**, inside the 95% acceptance band **[6–20]**.
-  Calibration = **rolling 250-day intercept, EMA=0.0 (no smoothing). No look-ahead.**
+* VaR<sub>0.95</sub> (PatchTST, calibrated):
+  exceptions 6.60% (breach rate), Kupiec p=0.380, Christoffersen (ind) p=0.631, effective N<sub>eff</sub>=394.
+  Last-250 breaches: 20, inside the 95% acceptance band [6–20].
+  Calibration = rolling 250-day intercept, EMA=0.0 (no smoothing). No look-ahead.
 <!-- VAR_HEAD_END -->
 
-**Variance forecasting (holdout)**  
-• **HAR-RV**: **Avg log-likelihood = −8.958** (higher is better for this metric), **RMSE = 1.354×10⁻⁴** (units: variance of daily returns).  
-• **GARCH(1,1)–t**: **Avg log-likelihood = −8.764**, **RMSE = 2.289×10⁻⁴**.  
+**Variance forecasting **  
+• HAR-RV: Avg log-likelihood = −8.958 (higher is better for this metric), RMSE = 1.354×10⁻⁴ (units: variance of daily returns).  
+• GARCH(1,1)–t: Avg log-likelihood = −8.764, RMSE = 2.289×10⁻⁴.  
 • PatchTST variance-head predictions are saved in `outputs/patch_preds.csv` (`sigma2_pred`) and can be scored with the same metrics.
 
-Interpretation: With **N_eff = 394**, a 6.85% breach rate is within sampling noise for α=0.05 and is **not rejected** by LR_uc or LR_ind. 
+Interpretation: With N_eff = 394, a 6.85% breach rate is within sampling noise for α=0.05 and is not rejected by LR_uc or LR_ind. 
 
 ---
 
@@ -35,17 +35,17 @@ bash scripts/reproduce.sh
 
 This will:
 
-1. Download SPY daily OHLC and compute **Garman–Klass** realized variance.
+1. Download SPY daily OHLC and compute Garman–Klass realized variance.
 2. Audit the series (missing days via market calendar, outliers, ADF on log-RV).
-3. Build sequences from **past T days to next day** (no look-ahead).
-4. Train PatchTST **quantile** (τ=0.05) and **variance** heads.
-5. Fit **HAR-RV** and **GARCH(1,1)–t** on an **expanding window** (refit daily), score the same holdout.
-6. Evaluate VaR with a **rolling 250-day intercept** (EMA=0.0), write `tables/var_backtest.csv` and the breach timeline figure.
+3. Build sequences from past T days to next day (no look-ahead).
+4. Train PatchTST quantile (τ=0.05) and variance heads.
+5. Fit HAR-RV and GARCH(1,1)–t on an expanding window (refit daily), score the same holdout.
+6. Evaluate VaR with a rolling 250-day intercept (EMA=0.0), write `tables/var_backtest.csv` and the breach timeline figure.
 7. Generate a short memo in `docs/`.
 
 Artifacts land in `outputs/`, `tables/`, `figs/`, `docs/`.
 
-> Repro tip: On first run, a **data snapshot** `data/spy_ohlc.parquet` is written and re-used to keep results stable across re-runs.
+> Repro tip: On first run, a data snapshot `data/spy_ohlc.parquet` is written and re-used to keep results stable across re-runs.
 
 ---
 
