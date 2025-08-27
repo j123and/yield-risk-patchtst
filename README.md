@@ -143,11 +143,11 @@ python src/eval_phase4.py --symbol SPY --holdout_start 2023-01-02 \
 
 ## What to open
 
-- `scripts/reproduce.sh` — end-to-end pipeline.
-- `outputs/patch_preds.csv` — dates, true returns, VaR₀.₉₅ and σ² predictions.
-- `tables/var_backtest.csv` — breach rate, LR\_uc p, LR\_ind p, LR\_cc p, N\_eff, last-250 counts.
-- `figs/var_breach_timeline.png` — breaches and acceptance band.
-- `docs/var_decision_memo.md` — short decision memo.
+- `scripts/reproduce.sh`  end-to-end pipeline.
+- `outputs/patch_preds.csv` dates, true returns, VaR 0.95 and σ² predictions.
+- `tables/var_backtest.csv` breach rate, LR\_uc p, LR\_ind p, LR\_cc p, N\_eff, last-250 counts.
+- `figs/var_breach_timeline.png` breaches and acceptance band.
+- `docs/var_decision_memo.md` short decision memo.
 
 ---
 
