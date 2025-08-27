@@ -54,8 +54,8 @@ Artifacts land in `outputs/`, `tables/`, `figs/`, `docs/`.
 **Data & returns**
 
 - Source: Yahoo daily OHLC for SPY.
-- Returns for the VaR head use **Adjusted Close** (dividends matter for SPY).
-- Realized variance proxy: **Garman–Klass**
+- Returns for the VaR head use Adjusted Close (dividends matter for SPY).
+- Realized variance proxy: Garman–Klass
 
   $$\mathrm{RV}^{GK} = \tfrac12\ln^2(H/L) - (2\ln2 - 1)\ln^2(C/O).$$
 
@@ -63,30 +63,30 @@ Artifacts land in `outputs/`, `tables/`, `figs/`, `docs/`.
 
 **Sequence builder (leak-safe)**
 
-- Inputs: past $T$ days $t\!-\!T,\dots,t\!-\!1$.
-- Targets: next-day return $r_t$ (quantile head) and next-day **log-variance** (variance head).
-- Split is **time-based** at `2023-01-02`; no peeking across the split.
+- Inputs: past $T$ days $t - T,\dots,t - 1$.
+- Targets: next-day return $r_t$ (quantile head) and next-day log-variance (variance head).
+- Split is time-based at `2023-01-02`; no peeking across the split.
 
 **Model**
 
 - **PatchTST** encoder (transformer over non-overlapping patches).
 - Heads:
-  - **Quantile head** at **τ=0.05** → direct VaR₀.₉₅.
-  - **Variance head** on **log-variance**; transform back (exp/softplus) to get $\sigma^2$.
-- Losses: **pinball** (quantile) and **MSE** (log-variance).
+  - Quantile head at τ=0.05, direct VaR₀.₉₅.
+  - Variance head on log-variance; transform back (exp/softplus) to get $\sigma^2$.
+- Losses: **pinball** (quantile) and MSE (log-variance).
 
 **Calibration (intercept-only)**
 
-At day $t$, compute residuals $u = r - q$ over the **previous 250 days**, set $\delta_t = \mathrm{quantile}_\alpha(u)$, then
+At day $t$, compute residuals $u = r - q$ over the previous 250 days, set $\delta_t = \mathrm{quantile}_\alpha(u)$, then
 $q_t^\* = q_t + \delta_t$.
-This uses **only past data** each day (leak-safe). EMA smoothing is **off** (0.0).
+This uses only past data each day (leak-safe). EMA smoothing is off (0.0).
 
 **Back-tests**
 
-- **Kupiec LR\_uc**: tests breach rate equals α.
-- **Christoffersen LR\_ind**: tests independence (no clustering).
-- **LR\_cc = LR\_uc + LR\_ind**: conditional coverage.
-- Last-250 acceptance band uses a **Binomial 95% interval**.
+- Kupiec LR\_uc: tests breach rate equals α.
+- Christoffersen LR\_ind: tests independence (no clustering).
+- LR\_cc = LR\_uc + LR\_ind: conditional coverage.
+- Last-250 acceptance band uses a Binomial 95% interval.
 
 **Baselines**
 
