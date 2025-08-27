@@ -30,13 +30,13 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 try:
-    import pandas_market_calendars as mcal  # optional
-except Exception:  # pragma: no cover
+    import pandas_market_calendars as mcal 
+except Exception:  
     mcal = None
 
 try:
-    from statsmodels.tsa.stattools import adfuller  # optional
-except Exception:  # pragma: no cover
+    from statsmodels.tsa.stattools import adfuller  
+except Exception:  
     adfuller = None
 
 TABLES = Path("tables")
@@ -73,8 +73,8 @@ def main(in_parquet: str = "data/spy_rv.parquet") -> None:
 
     df["date"] = pd.to_datetime(df["date"]).dt.tz_localize(None)
 
-    # Minimal cleaning policy (explicit):
-    # 1) sort; 2) drop rows with NaN RV_GK; 3) deduplicate by date (keep last)
+    # cleaning policy:
+    # 1) sort 2) drop rows with NaN RV_GK 3) deduplicate by date (keep last)
     df = df.sort_values("date")
     df = df[pd.notna(df["RV_GK"])].copy()
 
