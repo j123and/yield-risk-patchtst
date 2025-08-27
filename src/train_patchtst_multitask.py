@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """
 Train a simple PatchTST-like multi-task model (quantile τ=0.05 + log-variance) and write holdout predictions.
-Junior-level, but with the necessary theory fixes:
 - learnable patch positional embedding (so order matters)
 - require seq_len % patch_len == 0 (no unmasked zero padding)
 - assert time-based split is clean (non-empty, no overlap)
