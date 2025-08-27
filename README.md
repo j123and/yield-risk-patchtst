@@ -52,6 +52,7 @@ Artifacts land in `outputs/`, `tables/`, `figs/`, `docs/`.
 ## How it works
 
 **Data & returns**
+
   • Source: Yahoo daily OHLC for SPY.
   • Returns for the VaR head use **Adjusted Close** (dividends matter for SPY).
   • Realized variance proxy: **Garman–Klass**
