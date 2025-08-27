@@ -69,11 +69,11 @@ Artifacts land in `outputs/`, `tables/`, `figs/`, `docs/`.
 
 **Model**
 
-- **PatchTST** encoder (transformer over non-overlapping patches).
+- PatchTST encoder (transformer over non-overlapping patches).
 - Heads:
   - Quantile head at τ=0.05, direct VaR₀.₉₅.
   - Variance head on log-variance; transform back (exp/softplus) to get $\sigma^2$.
-- Losses: **pinball** (quantile) and MSE (log-variance).
+- Losses: pinball (quantile) and MSE (log-variance).
 
 **Calibration (intercept-only)**
 
@@ -90,14 +90,14 @@ This uses only past data each day (leak-safe). EMA smoothing is off (0.0).
 
 **Baselines**
 
-- **HAR-RV** on log-RV.
-- **GARCH(1,1)–t** (Student-t innovations).
-- Both use **expanding window, refit daily**.
+- HAR-RV on log-RV.
+- GARCH(1,1)–t (Student-t innovations).
+- Both use expanding window, refit daily.
 
 
 ---
 
-## Commands (explicit)
+## Commands
 
 ```bash
 # 1) Ingest + compute GK (writes data/spy_ohlc.parquet and data/spy_rv.parquet)
@@ -126,28 +126,28 @@ python src/eval_phase4.py --symbol SPY --holdout_start 2023-01-02 \
 
 ## Determinism & environment
 
-• Python **3.11+**. See `requirements.txt`.
-• Seeds are set for Python/NumPy/PyTorch; deterministic ops requested where available.
-• The script writes `outputs/run.json` with args, git SHA, and package versions so runs are traceable.
-• Note: Some GPU attention kernels are not fully deterministic; expect tiny run-to-run differences.
+- Python 3.11+. See `requirements.txt`.
+- Seeds are set for Python/NumPy/PyTorch; deterministic ops requested where available.
+- The script writes `outputs/run.json` with args, git SHA, and package versions so runs are traceable.
+- Note: Some GPU attention kernels are not fully deterministic; expect tiny run-to-run differences.
 
 ---
 
 ## Notes and limits
 
-• **Single asset (SPY)** and **daily bars** only.
-• **ES not scored**. The code can be extended to ES with **Fissler–Ziegel** scoring.
-• On this holdout, **HAR-RV** beats the deep variance head on the log-likelihood metric — normal for clean daily RV. PatchTST still gives you VaR and variance in one model.
+- Single asset (SPY) and daily bars only.
+- ES not scored. The code can be extended to ES with Fissler–Ziegel scoring.
+- On this holdout, HAR-RV beats the deep variance head on the log-likelihood metric — normal for clean daily RV. PatchTST still gives you VaR and variance in one model.
 
 ---
 
 ## What to open
 
-• `scripts/reproduce.sh` — end-to-end pipeline.
-• `outputs/patch_preds.csv` — dates, true returns, VaR₀.₉₅ and σ² predictions.
-• `tables/var_backtest.csv` — breach rate, **LR\_uc p**, **LR\_ind p**, **LR\_cc p**, N\_eff, last-250 counts.
-• `figs/var_breach_timeline.png` — breaches and acceptance band.
-• `docs/var_decision_memo.md` — short decision memo.
+- `scripts/reproduce.sh` — end-to-end pipeline.
+- `outputs/patch_preds.csv` — dates, true returns, VaR₀.₉₅ and σ² predictions.
+- `tables/var_backtest.csv` — breach rate, LR\_uc p, LR\_ind p, LR\_cc p, N\_eff, last-250 counts.
+- `figs/var_breach_timeline.png` — breaches and acceptance band.
+- `docs/var_decision_memo.md` — short decision memo.
 
 ---
 
