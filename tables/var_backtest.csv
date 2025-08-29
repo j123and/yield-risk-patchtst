@@ -1,0 +1,2 @@
+mode,breach_rate_raw,breach_rate_cal,coverage_raw,coverage_cal,kupiec_p_raw,kupiec_p_cal,christoffersen_ind_p_raw,christoffersen_ind_p_cal,christoffersen_cc_p_raw,christoffersen_cc_p_cal,effective_n,lastn,lastn_breaches,band_95pct
+none,0.046511627906976744,0.046511627906976744,0.9534883720930233,0.9534883720930233,0.6809912418238573,0.6809912418238573,0.6135643021671557,0.6135643021671557,0.8089528524625723,0.8089528524625723,645,250,20,6–20
