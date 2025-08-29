@@ -10,10 +10,9 @@ Goal: forecast variance and produce a VaR at 95% (α=0.05, left tail) that meets
 ## Headline results (holdout 2023-01-02 → 2025-07-31)
 
 <!-- VAR_HEAD_START -->
-* VaR<sub>0.95</sub> (PatchTST, calibrated):
-  exceptions 6.60% (breach rate), Kupiec p=0.380, Christoffersen (ind) p=0.631, effective N<sub>eff</sub>=394.
-  Last-250 breaches: 20, inside the 95% acceptance band [6–20].
-  Calibration = rolling 250-day intercept, EMA=0.0 (no smoothing). No look-ahead.
+* **VaR<sub>0.95</sub> (PatchTST, raw):** exceptions **N/A**, **Kupiec p≈N/A**, **Christoffersen (ind) p≈N/A**, **N<sub>eff</sub>=645**.
+  Last-250 breaches: **0**, 95% band **[6–20]**.
+  Calibration = **none (reporting raw PatchTST VaR).**
 <!-- VAR_HEAD_END -->
 
 **Variance forecasting**  

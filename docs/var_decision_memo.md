@@ -1,14 +1,13 @@
-# Intraday Volatility: VaR/ES - Decision Memo
+# Daily SPY VaR/Vol — Decision Memo
 
-**Date:** 2025-08-25
+**Date:** 2025-08-29
 
-## Headline
-- VaR95 (PatchTST calibrated): exceptions 6.85% (Kupiec p=0.277, Christoffersen p=0.325); last-250 breaches 20 ∈ [6–20]; effective N=394.
-- Variance: HAR RMSE=1.355251e-04, QLIKE=-8.960.
+## Headline (RAW, no calibration)
+- VaR95 (PatchTST raw): exceptions **N/A**; Kupiec p≈N/A, Christoffersen ind p≈N/A, cc p≈N/A; N_eff=645.
+- Last-250 breaches: **0** ∉ [6–20].
+
 
 ## Notes
-- VaR calibration: rolling intercept on residuals (see eval configs); stats reported after warm-up.
-- $\sigma^2$ evaluated with RMSE and QLIKE on holdout.
-- No look-ahead in sequence construction.
-
-*Regenerate this memo after retraining or updating evaluation tables.*
+- Sequences are leak-safe (past T→next day).
+- Evaluation uses unconditional (Kupiec) and independence (Christoffersen) tests.
+- No post-hoc calibration was applied to the quantile.
