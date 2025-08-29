@@ -10,8 +10,8 @@ Goal: forecast variance and produce a VaR at 95% (α=0.05, left tail) that meets
 ## Headline results (holdout 2023-01-02 → 2025-07-31)
 
 <!-- VAR_HEAD_START -->
-* **VaR<sub>0.95</sub> (PatchTST, raw):** exceptions **N/A**, **Kupiec p≈N/A**, **Christoffersen (ind) p≈N/A**, **N<sub>eff</sub>=645**.
-  Last-250 breaches: **0**, 95% band **[6–20]**.
+* **VaR<sub>0.95</sub> (PatchTST, raw):** exceptions **4.65%**, **Kupiec p≈0.681**, **Christoffersen (ind) p≈0.614**, **N<sub>eff</sub>=645**.
+  Last-250 breaches: **20**, inside the 95% band **[6–20]**.
   Calibration = **none (reporting raw PatchTST VaR).**
 <!-- VAR_HEAD_END -->
 
@@ -20,8 +20,7 @@ Goal: forecast variance and produce a VaR at 95% (α=0.05, left tail) that meets
 • GARCH(1,1)–t: Avg log-likelihood = −8.764, RMSE = 2.289×10⁻⁴.  
 • PatchTST variance-head predictions are saved in `outputs/patch_preds.csv` (`sigma2_pred`) and can be scored with the same metrics.
 
-Interpretation: With N_eff = 394, a 6.85% breach rate is within sampling noise for α=0.05 and is not rejected by LR_uc or LR_ind. 
-
+With N_eff = 645, a 4.65% breach rate is within sampling error for α=0.05 and is not rejected by LR_uc or LR_ind.
 ---
 
 ## Reproduce
@@ -71,7 +70,7 @@ Artifacts land in `outputs/`, `tables/`, `figs/`, `docs/`.
 - PatchTST encoder (transformer over non-overlapping patches).
 - Heads:
   - Quantile head at τ=0.05, direct VaR₀.₉₅.
-  - Variance head on log-variance; transform back (exp/softplus) to get $\sigma^2$.
+  - Variance head predicts log-variance and is exponentiated to σ² at write-time.
 - Losses: pinball (quantile) and MSE (log-variance).
 
 **Calibration (intercept-only)**
@@ -116,9 +115,9 @@ python src/train_patchtst_multitask.py  --npz outputs/spy_seq_120.npz --split_da
 python src/baseline_har.py     --holdout_start 2023-01-02
 python src/baseline_garch_t.py --holdout_start 2023-01-02
 
-# 6) VaR evaluation
+# 6) VaR evaluation (raw)
 python src/eval_phase4.py --symbol SPY --holdout_start 2023-01-02 \
-  --alpha 0.05 --calib_mode rolling --roll_window 250 --calib_ema 0.0
+  --alpha 0.05 --calib_mode none
 ```
 
 ---
