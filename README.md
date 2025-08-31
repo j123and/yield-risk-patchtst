@@ -1,11 +1,23 @@
 # PatchTST VaR/Volatility: SPY daily risk (VaR 0.95 and variance)
 
-PatchTST (quantile + variance heads) versus HAR-RV and GARCH(1,1)–t for daily SPY risk.
-Goal: forecast variance and produce a VaR at 95% (α=0.05, left tail) that meets standard back-tests with a leak-safe, reproducible pipeline.
+**Summary (Holdout 2023-01-02 → 2025-07-31)**
 
-![VaR 0.95 breach timeline](figs/var_breach_timeline.png)
+* Built a PatchTST forecaster for SPY daily returns with two heads:
 
-*Figure: Breach timeline for α=0.05. Shaded band shows the 95% Binomial acceptance range on the last 250 days.*
+  * **Quantile head** at τ=0.05 → 1-day **VaR₀.₉₅** (tail risk).
+  * **Variance head** → next-day variance forecast.
+* **VaR performance:** Exception rate **4.65%** (target 5%), **Kupiec p=0.68**, **Christoffersen p=0.61** on N=645 days.
+* **Baselines:** HAR-RV = 6.2% exceptions, GARCH(1,1)–t = 5.8%. PatchTST matches coverage and adds variance prediction in a single model.
+* **Variance results:** HAR-RV outperforms PatchTST on log-likelihood (−8.958 vs −8.976), consistent with linear baselines dominating on clean daily realized variance.
+* **Artifacts:** Full reproducibility via `scripts/reproduce.sh` → data snapshots, models, figures, CSVs, and a decision memo.
+
+<p align="center">  
+<img src="figs/var_breach_timeline.png" width="600">  
+</p>  
+
+*Figure: VaR breaches (red dots) vs 95% binomial acceptance band (gray) over the last 250 days.*
+
+---
 
 ## Headline results (holdout 2023-01-02 → 2025-07-31)
 

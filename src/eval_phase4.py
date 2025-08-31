@@ -205,15 +205,46 @@ def main():
     (TAB/"var_backtest.csv").write_text(out.to_csv(index=False))
 
     # plot
-    if len(df)>0:
-        import matplotlib.pyplot as plt
-        plt.figure(figsize=(9,3))
-        dates=df["date"].to_numpy(); y=np.zeros(len(df))
-        off=len(df)-len(exc_cal); y[off:]=exc_cal if off>=0 else exc_cal[-len(df):]
-        plt.plot(dates,y,drawstyle="steps-mid")
-        plt.title(f"VaR breaches (alpha={args.alpha:.3f}) — mode={mode}")
-        plt.ylabel("breach (1=yes)"); plt.xlabel("date")
-        plt.tight_layout(); plt.savefig(Path("figs")/"var_breach_timeline.png",dpi=140); plt.close()
+    # plot
+    # --- plot: rolling 250-day breach count with 95% acceptance band ---
+    # --- plot: rolling 250-day breach rate with 95% acceptance band ---
+    if len(df) > 0:
+        dates = df["date"].to_numpy()
+        # choose which series to show (use calibrated series for whatever mode you evaluated)
+        e_plot = exc_cal.astype(int)
+
+        # window size (250 if available)
+        W_plot = min(250, len(e_plot))
+        roll_count = (
+            pd.Series(e_plot, index=dates)
+            .rolling(W_plot, min_periods=W_plot)
+            .sum()
+            .dropna()
+        )
+
+        # convert to rate
+        roll_rate = roll_count / W_plot
+        lo, hi = lastn_band(args.alpha, W_plot)
+        lo_r, hi_r = lo / W_plot, hi / W_plot
+
+        fig, ax = plt.subplots(figsize=(10, 3.5))
+        # acceptance band across the whole x-range
+        ax.axhspan(lo_r, hi_r, alpha=0.18, label=f"95% band (W={W_plot}) [{lo_r:.3f}–{hi_r:.3f}]")
+        ax.axhline(args.alpha, lw=1.2, linestyle="--", label=f"target α={args.alpha:.2f}")
+
+        ax.plot(roll_rate.index, roll_rate.values, lw=1.6, label=f"breach rate (last {W_plot}d)")
+        ax.set_title(f"VaR rolling breach rate (α={args.alpha:.2f}) — mode={args.calib_mode}")
+        ax.set_ylabel(f"breach rate (last {W_plot} days)")
+        ax.set_xlabel("date")
+
+        ymax = max(float(roll_rate.max() or 0), float(hi_r))
+        ax.set_ylim(0, ymax + 0.05)
+
+        ax.legend(loc="upper left", frameon=False)
+        fig.tight_layout()
+        (Path("figs")/"var_breach_timeline.png").parent.mkdir(parents=True, exist_ok=True)
+        fig.savefig(Path("figs")/"var_breach_timeline.png", dpi=140)
+        plt.close(fig)
 
     a=args.alpha
     print(f"PatchTST VaR{int((1-a)*100)} exception_rate raw={br_raw:.4f}, {mode}={br_cal:.4f} (N_eff={int(N_cal)}, target={a:.4f})")
